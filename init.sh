@@ -4,4 +4,4 @@
 # Author : Prasanna <maddilaprasanna10@gmail.com>
 # Created: 03 May 2023
 
-virtualenv .env && source .env/bin/activate && pip install -r requirements.txt
+virtualenv .venv && source .venv/bin/activate && pip install -r requirements.txt
