@@ -18,24 +18,29 @@ class SummableMDP(gym.Env):
         `num_actions` actions using spaces.Discrete.
         Note: Both spaces are zero-indexed !!!
         """
-        # counters for determining end 
-        self.timesteps = timesteps
-        self.curr_time = 0
+        # counters for determining end of run
+        self.timesteps, self.curr_time = timesteps, 0
+
+        # main variables
         self.observation_space = spaces.Discrete(num_states)
         self.action_space = spaces.Discrete(num_actions)
         self.rewards = rewards
         self.transitions = transitions
+        self.curr_reward = 0.0
 
-        if self.rewards.keys() != self.transitions.keys(): 
+        if self.rewards.keys() != self.transitions.keys():
             raise RuntimeError("Rewards and Transitions defined on different domains")
         if init_state < 0 or init_state >= num_states:
             raise RuntimeError(f"Invalid init state{init_state}: out of bounds!")
 
+        # storing state-related variables
         self.init_state = init_state    # storing this for reset()
         self.curr_state = init_state
-        self.curr_reward = 0.0
 
     def reset(self, seed=None, options=None):
+        """
+        Reset the MDP to run the next trajectory
+        """
         super().reset(seed=seed)
         self.curr_reward = 0.0
         self.curr_state = self.init_state
@@ -48,31 +53,47 @@ class SummableMDP(gym.Env):
         so that s ---> s',
         """
         self.curr_time += 1
-        try: 
+        try:
             probas = self.transitions[(self.curr_state, action)]
         except KeyError:
-            return (self.curr_state, self.curr_reward, 
-                    self.curr_time == self.timesteps,"Undefined state accessed. Breaking early.")
+            return (self.curr_state, self.curr_reward,
+                    self.curr_time == self.timesteps,
+                    "Undefined state accessed. Breaking early.")
+        self.curr_state = self._get_state(probas)
+        self.curr_reward += self._get_reward(action)
 
-        # Create a mask that is 1 only where we select the element.
-        # this mask has to be generated using transition probability
-        # as defined in `probas`.
-        mask = np.zeros(self.observation_space.n, dtype=np.int8); 
-        mask[np.random.choice( range(self.observation_space.n), p=probas)] = 1
-
-        # Selecting new state using observation space.
-        self.old_state = self.curr_state
-        self.curr_state = self.observation_space.sample(mask=mask)
-        
-        # Getting reward 
-        self.curr_reward += self.rewards[(self.old_state, action)]
-        
         # returning results of step
         return self.curr_state, self.curr_reward, self.curr_time == self.timesteps, None
 
+    def _get_state(self, probas):
+        """
+        Helper function to return the current state,
+        using the probability distribution over each
+        state in self.observation_space
+        """
+        # Create a mask that is 1 only where we select the element.
+        # this mask has to be generated using transition probability
+        # as defined in `probas`.
+        mask = np.zeros(self.observation_space.n, dtype=np.int8)
+        mask[np.random.choice( range(self.observation_space.n), p=probas)] = 1
+
+        # Saving current state and selecting new state using observation space
+        self.old_state = self.curr_state
+        return self.observation_space.sample(mask=mask)
+
+    def _get_reward(self, action):
+        """
+        Helper function to calculate the reward for each
+        timestep, using the old state and the action.
+        """
+        return self.rewards[(self.old_state, action)]
+
     def sample(self):
+        """
+        Samples an action from the action space
+        """
         return self.action_space.sample()
-    
+
 if __name__ == "__main__":
     # simulating the text example.
     mdp_states, mdp_actions = 3, 2
@@ -87,28 +108,28 @@ if __name__ == "__main__":
     # transition probabilities are represented as
     # (new_state, old_state, action): dict key-value pairs
     mdp_transitions = {
-            (0,0): [0.9, 0, 0.1], (0,1): [0,1,0], 
-            (1,0): [0,1,0], (1,1): (0.8, 0.2, 0), 
+            (0,0): [0.9, 0, 0.1], (0,1): [0,1,0],
+            (1,0): [0,1,0], (1,1): (0.8, 0.2, 0),
             (2,0): [0.9, 0.1, 0]
             }
 
     # just checking
     assert ( mdp_transitions.keys() == mdp_rewards.keys() )
-    
+
     # initialising
     mdp = SummableMDP(
-            mdp_actions, mdp_states, 
-            mdp_rewards, mdp_transitions, 
+            mdp_actions, mdp_states,
+            mdp_rewards, mdp_transitions,
             init_state = 1
             )
-    
+
     done, undefined_acess = False, 0
     while not done:
         curr_action = mdp.sample()
         curr_state, reward, done, info = mdp.step(curr_action)
-        if info is not None: 
-            undefined_acess+=1 
-    
+        if info is not None:
+            undefined_acess+=1
+
     print(f"Current reward: {mdp.curr_reward}")
     print(f"Undefined state accesses: {undefined_acess}")
     mdp.close()
