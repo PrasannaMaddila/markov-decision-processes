@@ -20,18 +20,15 @@ def value_iterations(mdp: MDP, eps: float = 1e-5) -> list[float]:
     while delta > eps:
         for s in range(mdp.observation_space.n):
             v_curr = V[s]
-            q = np.zeros(mdp.observation_space.n)
+            q = np.zeros(mdp.action_space.n)
             for a in range(mdp.action_space.n):
                 for i, s_prime in enumerate(range(mdp.observation_space.n)):
-                    try:
-                        q[i] += mdp.transitions[(s, a)][s_prime] * (
-                            mdp.rewards[(s, a)] + mdp.beta * V[s_prime]
-                        )
-                    except KeyError:
-                        pass 
+                    q[i] += mdp.transitions[(s, a)][s_prime] * (
+                        mdp.rewards[(s, a)] + self.beta * V[s_prime]
+                    )
             V[s] = max(q)
+            delta = max(delta, abs(v - V[s]))
             pi[s] = np.argmax(q)
-            delta = abs(v_curr - V[s])
 
     # return
     return V, pi

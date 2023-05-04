@@ -15,32 +15,30 @@ def value_iterations(mdp: MDP, eps: float = 1e-5) -> list[float]:
     V = np.zeros(mdp.observation_space.n)
     pi = np.zeros(mdp.observation_space.n)
     delta = 2 * eps
-
-    # calculate the optimal values and policy
     while delta > eps:
+        q = np.zeros((mdp.observation_space.n, mdp.action_space.n))
         for s in range(mdp.observation_space.n):
             v_curr = V[s]
-            q = np.zeros(mdp.observation_space.n)
             for a in range(mdp.action_space.n):
-                for i, s_prime in enumerate(range(mdp.observation_space.n)):
-                    try:
-                        q[i] += mdp.transitions[(s, a)][s_prime] * (
-                            mdp.rewards[(s, a)] + mdp.beta * V[s_prime]
-                        )
-                    except KeyError:
-                        pass 
-            V[s] = max(q)
-            pi[s] = np.argmax(q)
-            delta = abs(v_curr - V[s])
+                try:
+                    q[s, a] = mdp.rewards[s, a] + mdp.beta * sum(
+                        [
+                            mdp.transitions[(s, a)][s_prime] * V[s_prime]
+                            for s_prime in range(mdp.observation_space.n)
+                        ]
+                    )
+                except KeyError:
+                    # Passing over undefined states
+                    pass
+            V[s] = np.max(q[s, :])
+            pi[s] = np.argmax(q[s, :])
+            delta = abs(V[s] - v_curr)
 
-    # return
+    # return calculated policy and values
     return V, pi
 
-if __name__ == "__main__": 
-    # choose the initial state using a partial function
-    INIT_STATE = int(sys.argv[1]) if len(sys.argv) > 1 else 0
-    print(f"Setting initial state to  {INIT_STATE}")
 
+if __name__ == "__main__":
     # create the same MDP as before
     mdp_states, mdp_actions = 3, 2
 
@@ -71,7 +69,7 @@ if __name__ == "__main__":
         mdp_states,
         mdp_rewards,
         mdp_transitions,
-        init_state=INIT_STATE,
+        init_state=1,
         beta=0.8,
         f=mdp_strategy,
         timesteps=1000,
@@ -79,4 +77,3 @@ if __name__ == "__main__":
 
     # Run the value iterations to get optimal values and policy
     print(f"Results of value_iterations: {value_iterations(mdp)}")
-

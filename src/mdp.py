@@ -3,10 +3,14 @@ This module implements the MDP class, a Gym environment
 that models a Markovian Decision Process.
 """
 
+import sys
+import multiprocessing as mp
+from functools import partial
 import numpy as np
 import gymnasium as gym
-import multiprocessing as mp
 from gymnasium import spaces
+from tqdm import tqdm
+
 
 class MDP(gym.Env):
     """
@@ -83,7 +87,9 @@ class MDP(gym.Env):
         # state with defined transitions, stepping.
         probas = self.P[self.curr_state, :]
         self.curr_reward += self._get_reward(action)
-        self.curr_state = self._get_state(probas)    # old_state <- curr_state, curr_state <- new_state
+        self.curr_state = self._get_state(
+            probas
+        )  # old_state <- curr_state, curr_state <- new_state
         self.curr_time += 1
         # returning results of step
         return self.curr_state, self.curr_reward, self.curr_time == self.timesteps, None
@@ -139,19 +145,19 @@ class MDP(gym.Env):
         return self.action_space.sample()
 
 
-def create_mdp_and_run_epoch(args):
-    """ 
+def create_mdp_and_run_epoch(init_state: int = 0, args=None):
+    """
     Function to create an MDP and run an epoch, to get the average reward.
     Parameters are hardcoded for now.
     """
     # simulating the text example.
     mdp_states, mdp_actions = 3, 2
 
-    # rewards are represented as (curr_state,action) key-value paris
+    # rewards are represented as (curr_state,action)->reward key-value pairs
     mdp_rewards = {(0, 0): -5, (0, 1): 10, (1, 0): 5, (1, 1): 0, (2, 0): 20}
 
-    # transition probabilities are represented as
-    # (new_state, old_state, action): dict key-value pairs
+    # transition probabilities are represented as a dict of
+    # (curr_state, action)-> proba_of_state[idx] key-value pairs
     mdp_transitions = {
         (0, 0): [0.9, 0, 0.1],
         (0, 1): [0, 1, 0],
@@ -161,7 +167,10 @@ def create_mdp_and_run_epoch(args):
     }
 
     # Strategy used by the MDP
-    mdp_strategy = [(0.1, 0.9), (1., 0.), (1.,)]
+    # strat[state] = list[proba_of_choosing_action: float]
+    # Note: here, state 3 only defines action 1, so it is
+    #       a singleton.
+    mdp_strategy = [(0.1, 0.9), (1.0, 0.0), (1.0,)]
 
     # just checking
     assert mdp_transitions.keys() == mdp_rewards.keys()
@@ -171,7 +180,7 @@ def create_mdp_and_run_epoch(args):
         mdp_states,
         mdp_rewards,
         mdp_transitions,
-        init_state=2,
+        init_state=init_state,
         beta=0.8,
         f=mdp_strategy,
         timesteps=1000,
@@ -180,24 +189,35 @@ def create_mdp_and_run_epoch(args):
     done = False
     while not done:
         curr_action = mdp.sample()
-        curr_state, reward, done, info = mdp.step(curr_action)
-    result = mdp.curr_reward
+        _, reward, done, _ = mdp.step(curr_action)
     mdp.reset()
-    
+
     # return the result of the trajectory
-    return result
+    return reward
+
 
 if __name__ == "__main__":
+    # choose the initial state using a partial function
+    INIT_STATE = int(sys.argv[1]) if len(sys.argv) > 1 else 0
+    worker = partial(create_mdp_and_run_epoch, INIT_STATE)
+    print(f"Setting initial state to  {INIT_STATE}")
+
+    # define the parameters of the run
     num_epochs, record_list = 100, []
+
     # running it in parallel for speed
-    with mp.Pool() as pool: 
-        for result in pool.map(create_mdp_and_run_epoch, range(num_epochs)):
+    with mp.Pool() as pool:
+        for result in tqdm(
+            pool.imap_unordered(worker, range(num_epochs)), total=num_epochs
+        ):
             record_list.append(result)
 
     # checking that we did not lose any results
-    assert (len(record_list) == num_epochs)
-    
-    average_reward = sum(record_list) / len(record_list)
-    print(f"Average reward over {num_epochs} runs = {average_reward}")
+    assert len(record_list) == num_epochs
+
+    # results
+    print(
+        f"Average reward over {num_epochs} runs = {sum(record_list) / len(record_list)}"
+    )
     print(f"Max reward over {num_epochs} runs = {max(record_list)}")
     print(f"Min reward over {num_epochs} runs = {min(record_list)}")
