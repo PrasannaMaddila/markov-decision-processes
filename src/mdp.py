@@ -81,11 +81,10 @@ class MDP(gym.Env):
                 "Invalid state accessed. Not stepping.",
             )
         # state with defined transitions, stepping.
-        self.curr_time += 1
         probas = self.P[self.curr_state, :]
-        self.curr_state = self._get_state(probas)
         self.curr_reward += self._get_reward(action)
-
+        self.curr_state = self._get_state(probas)    # old_state <- curr_state, curr_state <- new_state
+        self.curr_time += 1
         # returning results of step
         return self.curr_state, self.curr_reward, self.curr_time == self.timesteps, None
 
@@ -126,10 +125,11 @@ class MDP(gym.Env):
         timestep, using the old state and the action.
         """
         try:
-            return self.rewards[(self.old_state, action)] * (
+            return self.rewards[(self.curr_state, action)] * (
                 self.beta**self.curr_time
             )
         except KeyError:
+            # When accessing undefined states.
             return 0.0
 
     def sample(self):
@@ -161,12 +161,12 @@ def create_mdp_and_run_epoch(args):
     }
 
     # Strategy used by the MDP
-    mdp_strategy = [(0.1, 0.9), (1, 0), (1,)]
+    mdp_strategy = [(0.1, 0.9), (1., 0.), (1.,)]
 
     # just checking
     assert mdp_transitions.keys() == mdp_rewards.keys()
 
-    mdp = SummableMDP(
+    mdp = MDP(
         mdp_actions,
         mdp_states,
         mdp_rewards,
@@ -188,10 +188,16 @@ def create_mdp_and_run_epoch(args):
     return result
 
 if __name__ == "__main__":
-    num_epochs, average_reward, record_list = 100, 0.0, []
+    num_epochs, record_list = 100, []
+    # running it in parallel for speed
     with mp.Pool() as pool: 
         for result in pool.map(create_mdp_and_run_epoch, range(num_epochs)):
-            average_reward += result;
             record_list.append(result)
-    average_reward /= num_epochs
+
+    # checking that we did not lose any results
+    assert (len(record_list) == num_epochs)
+    
+    average_reward = sum(record_list) / len(record_list)
     print(f"Average reward over {num_epochs} runs = {average_reward}")
+    print(f"Max reward over {num_epochs} runs = {max(record_list)}")
+    print(f"Min reward over {num_epochs} runs = {min(record_list)}")
