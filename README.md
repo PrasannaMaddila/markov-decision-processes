@@ -8,8 +8,8 @@ The class implements a discounted reward MDP with a strategy profile `f`. For th
 
 | -        | State 1          | State 2         | State 3          |
 |----------|------------------|-----------------|------------------|
-| Action 1 | -5 | (0.9,0,0.1) | 5 | (0,1,0)     | 20 | (0.9,0.1,0) |
-| Action 2 | 10 | (0,1,0)     | 0 | (0.8,0.2,0) | undef            |
+| Action 1 | -5 \| (0.9,0,0.1) | 5 \| (0,1,0)     | 20 \| (0.9,0.1,0) |
+| Action 2 | 10 \| (0,1,0)     | 0 \| (0.8,0.2,0) | undef            |
 
 
 with a discount factor $\beta = 0.8$, which should have the optimal values $v_\beta = [28.9, 25, 42.8]$. 
