@@ -2,7 +2,7 @@
 Module to register the models created in this directory.
 Also helps make them exportable to other directories.
 """
-from gym.envs.registration import register
+from gymnasium.envs.registration import register
 
 register(
     id="src/MDP",

@@ -216,8 +216,8 @@ if __name__ == "__main__":
     assert len(record_list) == num_epochs
 
     # results
+    print(f"Max reward over {num_epochs} runs = {max(record_list)}")
     print(
         f"Average reward over {num_epochs} runs = {sum(record_list) / len(record_list)}"
     )
-    print(f"Max reward over {num_epochs} runs = {max(record_list)}")
     print(f"Min reward over {num_epochs} runs = {min(record_list)}")

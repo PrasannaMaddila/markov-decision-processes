@@ -3,14 +3,15 @@ Module to implement the value iterations method for Markov Decision Processes.
 This will determine the right strategy values.
 """
 
-from mdp import *
-import matplotlib.pyplot as plt
+import numpy as np
+from mdp import MDP
 
 
 def value_iterations(mdp: MDP, eps: float = 1e-5) -> list[float]:
     """
     Function to implement the value iterations method for
     a Markov Decision Process.
+    Pseudo-code available at: https://www.cs.cmu.edu/afs/cs/project/jair/pub/volume4/kaelbling96a-html/node19.html
     """
     V = np.zeros(mdp.observation_space.n)
     pi = np.zeros(mdp.observation_space.n)
@@ -18,7 +19,9 @@ def value_iterations(mdp: MDP, eps: float = 1e-5) -> list[float]:
     while delta > eps:
         q = np.zeros((mdp.observation_space.n, mdp.action_space.n))
         for s in range(mdp.observation_space.n):
-            v_curr = V[s]
+            v_curr = V[s]  # to calculate delta later
+
+            # update q-values
             for a in range(mdp.action_space.n):
                 try:
                     q[s, a] = mdp.rewards[s, a] + mdp.beta * sum(
@@ -30,6 +33,8 @@ def value_iterations(mdp: MDP, eps: float = 1e-5) -> list[float]:
                 except KeyError:
                     # Passing over undefined states
                     pass
+
+            # Update the Value and Policy using q-values
             V[s] = np.max(q[s, :])
             pi[s] = np.argmax(q[s, :])
             delta = abs(V[s] - v_curr)
