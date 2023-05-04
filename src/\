@@ -5,10 +5,10 @@ that models a Markovian Decision Process.
 
 import numpy as np
 import gymnasium as gym
-import multiprocessing as mp
 from gymnasium import spaces
 
-class MDP(gym.Env):
+
+class SummableMDP(gym.Env):
     """
     Class to implement a stationary Markov Decision Process
     as a gym environment.
@@ -22,7 +22,6 @@ class MDP(gym.Env):
         transitions: dict[(int, int):int],  # (s,a) ~> s'
         init_state: int,  # initial state
         beta: float,  # discount factor
-        f: list[tuple[int]],  # strategy used by controller
         timesteps: int = 100,
     ):
         """
@@ -39,7 +38,6 @@ class MDP(gym.Env):
         self.rewards = rewards
         self.transitions = transitions
         self.curr_reward = 0.0
-        self.f = f
         self.beta = beta
 
         if self.rewards.keys() != self.transitions.keys():
@@ -51,10 +49,6 @@ class MDP(gym.Env):
         self.init_state = init_state  # storing this for reset()
         self.curr_state = init_state
 
-        # calculate the transition matrix
-        # using the strategy and the transition probas
-        self._calculate_P()
-
     def reset(self, seed=None, options=None):
         """
         Reset the MDP to run the next trajectory
@@ -63,46 +57,28 @@ class MDP(gym.Env):
         self.curr_reward = 0.0
         self.curr_state = self.init_state
         self.old_state = None
-        self.curr_time = 0
+        self.old_state = None
 
     def step(self, action: int):
         """
         Simulate a step in an MDP. This means an action is taken,
         so that s ---> s',
         """
+        self.curr_time += 1
         try:
-            self.transitions[(self.curr_state, action)]
+            probas = self.transitions[(self.curr_state, action)]
         except KeyError:
-            # Using info parameter to return status
             return (
                 self.curr_state,
                 self.curr_reward,
                 self.curr_time == self.timesteps,
-                "Invalid state accessed. Not stepping.",
+                "Undefined state accessed. Breaking early.",
             )
-        # state with defined transitions, stepping.
-        self.curr_time += 1
-        probas = self.P[self.curr_state, :]
         self.curr_state = self._get_state(probas)
         self.curr_reward += self._get_reward(action)
 
         # returning results of step
         return self.curr_state, self.curr_reward, self.curr_time == self.timesteps, None
-
-    def _calculate_P(self):
-        """
-        Helper function to calculate the transition matrix P
-        as defined by the Markov Decision Process. This relies on
-        the object being well-initialised first.
-        """
-        self.P = np.zeros((self.observation_space.n, self.observation_space.n))
-        for i in range(self.observation_space.n):
-            local_f = self.f[i]
-            for j in range(self.observation_space.n):
-                for k in range(len(local_f)):
-                    # this length is similar to number
-                    # of actions for this state.
-                    self.P[i, j] += local_f[k] * self.transitions[(i, k)][j]
 
     def _get_state(self, probas):
         """
@@ -125,12 +101,7 @@ class MDP(gym.Env):
         Helper function to calculate the reward for each
         timestep, using the old state and the action.
         """
-        try:
-            return self.rewards[(self.old_state, action)] * (
-                self.beta**self.curr_time
-            )
-        except KeyError:
-            return 0.0
+        return self.rewards[(self.old_state, action)] * (self.beta**self.timesteps)
 
     def sample(self):
         """
@@ -139,11 +110,7 @@ class MDP(gym.Env):
         return self.action_space.sample()
 
 
-def create_mdp_and_run_epoch(args):
-    """ 
-    Function to create an MDP and run an epoch, to get the average reward.
-    Parameters are hardcoded for now.
-    """
+if __name__ == "__main__":
     # simulating the text example.
     mdp_states, mdp_actions = 3, 2
 
@@ -160,38 +127,22 @@ def create_mdp_and_run_epoch(args):
         (2, 0): [0.9, 0.1, 0],
     }
 
-    # Strategy used by the MDP
-    mdp_strategy = [(0.1, 0.9), (1, 0), (1,)]
-
     # just checking
     assert mdp_transitions.keys() == mdp_rewards.keys()
 
+    # initialising
     mdp = SummableMDP(
-        mdp_actions,
-        mdp_states,
-        mdp_rewards,
-        mdp_transitions,
-        init_state=2,
-        beta=0.8,
-        f=mdp_strategy,
-        timesteps=1000,
+        mdp_actions, mdp_states, mdp_rewards, mdp_transitions, 
+        init_state=2, beta=0.8
     )
 
-    done = False
+    done, undefined_acess = False, 0
     while not done:
         curr_action = mdp.sample()
         curr_state, reward, done, info = mdp.step(curr_action)
-    result = mdp.curr_reward
-    mdp.reset()
-    
-    # return the result of the trajectory
-    return result
+        if info is not None:
+            undefined_acess += 1
 
-if __name__ == "__main__":
-    num_epochs, average_reward, record_list = 100, 0.0, []
-    with mp.Pool() as pool: 
-        for result in pool.map(create_mdp_and_run_epoch, range(num_epochs)):
-            average_reward += result;
-            record_list.append(result)
-    average_reward /= num_epochs
-    print(f"Average reward over {num_epochs} runs = {average_reward}")
+    print(f"Current reward: {mdp.curr_reward}")
+    print(f"Undefined state accesses: {undefined_acess}")
+    mdp.close()
