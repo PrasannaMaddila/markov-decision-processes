@@ -57,7 +57,7 @@ class MDP(gym.Env):
 
         # calculate the transition matrix
         # using the strategy and the transition probas
-        self._calculate_P()
+        # self._calculate_P()
 
     def reset(self, seed=None, options=None):
         """
@@ -85,7 +85,7 @@ class MDP(gym.Env):
                 "Invalid state accessed. Not stepping.",
             )
         # state with defined transitions, stepping.
-        probas = self.P[self.curr_state, :]
+        probas = self.transitions[(self.curr_state, action)]
         self.curr_reward += self._get_reward(action)
         self.curr_state = self._get_state(
             probas
@@ -100,6 +100,7 @@ class MDP(gym.Env):
         as defined by the Markov Decision Process. This relies on
         the object being well-initialised first.
         """
+        raise RuntimeError("_calculate_P should not be explicit.")
         self.P = np.zeros((self.observation_space.n, self.observation_space.n))
         for i in range(self.observation_space.n):
             local_f = self.f[i]
@@ -141,8 +142,21 @@ class MDP(gym.Env):
     def sample(self):
         """
         Samples an action from the action space
+        according to probabilities defined by the
+        strategy and current state
         """
-        return self.action_space.sample()
+        # using a mask that is 1 only for the action
+        # chosen using the probas chosen using the strategy.
+        action_probas = self.f[self.curr_state]
+        if len(action_probas) != self.action_space.n:
+            # Undefined states : pad action_probas
+            # on the right to the same length
+            action_probas = np.pad(
+                action_probas, (0, self.action_space.n - len(action_probas))
+            )
+        mask = np.zeros(self.action_space.n, dtype=np.int8)
+        mask[np.random.choice(range(self.action_space.n), p=action_probas)] = 1
+        return self.action_space.sample(mask=mask)
 
 
 def create_mdp_and_run_epoch(init_state: int = 0, args=None):
@@ -216,8 +230,6 @@ if __name__ == "__main__":
     assert len(record_list) == num_epochs
 
     # results
-    print(f"Max reward over {num_epochs} runs = {max(record_list)}")
     print(
         f"Average reward over {num_epochs} runs = {sum(record_list) / len(record_list)}"
     )
-    print(f"Min reward over {num_epochs} runs = {min(record_list)}")
